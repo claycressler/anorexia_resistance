@@ -4,8 +4,11 @@ title: Stochastic simulation of evolution of antibiotic resistance in the face o
 output: bookdown::html_document2
 ---
 
+
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE,
+                      dev=c('png','tiff'),
+                      fig.path='figures/')
 ```
 
 ## Introduction
@@ -242,7 +245,7 @@ set.seed(1234)
 seeds <- floor(runif(24, 1, 1e5))
 mclapply(seeds,
          function(s) stochastic_strain_competition(100, tstep=0.1, pars=pars, y0=y0, seed=s),
-         mc.cores=4) -> stoch_sims
+         mc.cores=12) -> stoch_sims
 
 par(mfrow=c(1,3))
 for (j in 2:4) {
@@ -261,14 +264,15 @@ How does anorexia affect these results? We can explore that by varying the value
 ```{r fig3, fig.height=4, fig.width=6, fig.cap=""}
 
 ## Vary theta and record the mean trajectories only
+## Let theta = 10 be the "normal" feeding level, so theta=8, 9 represent moderate and mild anorexia
 Rresults <- P1results <- P2results <- c()
-for (th in 8:12) {
+for (th in 8:10) {
   pars <- c(theta=th, chi=0.1, alpha1=1, alpha2=0.7, eta1=1000, eta2=1000, epsilon1=20, epsilon2=20, delta1=1, delta2=1, mu=0.001)
   set.seed(1234)
   seeds <- floor(runif(24, 1, 1e5))
   mclapply(seeds,
-           function(s) stochastic_strain_competition(100, tstep=0.1, pars=pars, y0=y0, seed=s),
-           mc.cores=4) -> stoch_sims
+           function(s) stochastic_strain_competition(100, tstep=0.1, pars=pars, y0=c(R=100, P1=10, P2=0), seed=s),
+           mc.cores=12) -> stoch_sims
   Rresults <- cbind(Rresults,
                    lapply(stoch_sims, function(s) s[,2]) %>% do.call(cbind.data.frame, .) %>% apply(., 1, mean))
   P1results <- cbind(P1results,
@@ -277,7 +281,290 @@ for (th in 8:12) {
                    lapply(stoch_sims, function(s) s[,4]) %>% do.call(cbind.data.frame, .) %>% apply(., 1, mean))
   print(th)
 }
+
+plot.new()
+plot.window(xlim=c(0,100), ylim=range(Rresults[,1:3]))
+axis(1); axis(2); box('plot')
+for(i in 1:3) lines(seq(0,100,0.1), Rresults[,i], col=i, lwd=2)
+
+plot.new()
+plot.window(xlim=c(0,100), ylim=range(P1results[,1:3]))
+axis(1); axis(2); box('plot')
+for(i in 1:3) lines(seq(0,100,0.1), P1results[,i], col=i, lwd=2)
+
+plot.new()
+plot.window(xlim=c(0,100), ylim=range(P2results[,1:3]))
+axis(1); axis(2); box('plot')
+for(i in 1:3) lines(seq(0,100,0.1), P2results[,i], col=i, lwd=2)
+
+
 ```
   
 Key thing to note here: increasing ingestion increases the abundance of strain 1, but not strain 2 in the absence of drugs. 
 This is the key thing to keep in mind... anorexia will reduce the likelihood of emergence by reducing the abundance of the drug-susceptible strain.
+
+What if you allow for drugs?
+Here I am letting the parameter $\Delta$ capture the effect of drugs on strain 1 only - I will assume for simplicity that strain 2 is completely resistant to all doses of drugs.
+We also have to assume that drugs are not introduced until some time in the future, since they won't be there at the beginning of infection.
+Here I will assume that drugs start at $t = 20$.
+\begin{align}
+\frac{dR}{dt} &= \theta - \chi R - \frac{\alpha_1 R}{\eta_1 + R}P_1 - \frac{\alpha_2 R}{\eta_2 + R}P_2 \\
+\frac{dP_1}{dt} &= \epsilon_1 \frac{\alpha_1 R}{\eta_1 + R}P_1 - \delta_1 P_1 - \mu P_1 + \mu P_2 -\Delta \\
+\frac{dP_1}{dt} &= \epsilon_2 \frac{\alpha_2 R}{\eta_2 + R}P_2 - \delta_2 P_2 - \mu P_2 + \mu P_1
+\end{align}
+
+When ingestion is high, I find that increasing drug pressure increases the likelihood of resistance emerging (Fig. \@ref(fig:highIngestFig1)). 
+This might actually strike as a bit surprising, since the argument for high-dose drugs is that they crush drug-susceptible populations quickly, thereby limiting mutation supply.
+
+```{r highIngestFig1, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high."}
+
+stochastic_strain_competition_w_drugs <- function(tmax, tstep, pars, y0, seed) {
+  set.seed(seed)
+  
+  theta <- pars["theta"]
+  chi <- pars["chi"]
+  alpha1 <- pars["alpha1"]
+  alpha2 <- pars["alpha2"]
+  eta1 <- pars["eta1"]
+  eta2 <- pars["eta2"]
+  epsilon1 <- pars["epsilon1"]
+  epsilon2 <- pars["epsilon2"]
+  delta1 <- pars["delta1"]
+  delta2 <- pars["delta2"]
+  mu <- pars["mu"]
+  D <- pars["D"]
+  tDrug <- pars["tDrug"]
+  
+  ## initialize the time at t = 0
+  t <- 0
+  
+  R <- y0["R"]
+  P1 <- y0["P1"]
+  P2 <- y0["P2"]
+  
+  ## initialize a dataframe to store the time and population size
+  sim <- array(NA, dim=c(1e5, 4))
+  sim[1,] <- c(t,R,P1,P2)
+  i <- 2
+  ## start the algorithm
+  while (t < tmax) {
+    ## compute rates
+    rates <- c(theta, ## add resource = 1
+               chi*R, ## host resource use = 2
+               alpha1*R/(eta1+R)*P1, ## strain 1 resource consumption = 3
+               alpha2*R/(eta2+R)*P2, ## strain 2 resource consumption = 4
+               epsilon1*alpha1*R/(eta1+R)*P1, ## strain 1 replication = 5
+               epsilon2*alpha2*R/(eta2+R)*P2, ## strain 2 replication = 6
+               ifelse(P1 > 0, ifelse(t > tDrug, delta1*P1 + D, delta1*P1), 0), ## strain 1 death = 7
+               delta2*P2, ## strain 2 death = 8
+               mu*P1, ## strain 1 mutating to strain 2 = 9
+               mu*P2) ## strain 2 mutating to strain 1 = 10
+   
+    ## what time does the event happen?
+    dt <- rexp(1, rate=sum(rates))
+    
+    ## update t 
+    t <- t + dt
+    
+    ## "wheel of fortune"
+    wheel <- cumsum(rates)/sum(rates)
+    
+    ## which event happens? Draw a random uniform to determine
+    rand <- runif(1)
+    event <- 1 + sum(rand > wheel)
+    if (event==1) R <- R + 1
+    else if (event%in%2:4) R <- R - 1
+    else if (event==5) P1 <- P1 + 1
+    else if (event==6) P2 <- P2 + 1
+    else if (event==7) P1 <- P1 - 1
+    else if (event==8) P2 <- P2 - 1
+    else if (event==9) { P1 <- P1 -1; P2 <- P2 + 1}
+    else {P1 <- P1 + 1; P2 <- P2 - 1}
+    
+    sim[i,] <- c(t, R, P1, P2) 
+    i <- i + 1
+  }
+  sim <- sim[1:(i-1),]
+  ## Clean up: we're recording **way** too much information here - only record every tstep time steps
+  lapply(seq(0,tmax,tstep), function(t) c(t,sim[((sim[,1] > t) %>% which %>% min)-1,2:4])) %>% do.call(rbind.data.frame,.) -> sim2
+  colnames(sim2) <- c("t","R","P1","P2")
+  return(sim2)
+}
+# 
+# pars <- c(theta=10, chi=0.1, alpha1=0.1, alpha2=0.08, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.0001, D=0, tDrug=30)
+# out <- stochastic_strain_competition_w_drugs(400, tstep=0.1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=13234)
+# par(mfrow=c(1,3))
+# plot(out[,c(1,2)], type='l')
+# abline(h=pars["eta2"]*pars["delta2"]/(pars["epsilon2"]*pars["alpha2"]-pars["delta2"])) ## resource requirement for strain 2
+# plot(out[,c(1,3)], type='l')
+# plot(out[,c(1,4)], type='l')
+# 
+# pars <- c(theta=10, chi=0.1, alpha1=0.1, alpha2=0.08, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.01, D=5, tDrug=80)
+# out <- stochastic_strain_competition_w_drugs(200, tstep=0.1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=13234)
+# par(mfrow=c(1,3))
+# plot(out[,c(1,2)], type='l')
+# abline(h=pars["eta2"]*pars["delta2"]/(pars["epsilon2"]*pars["alpha2"]-pars["delta2"])) ## resource requirement for strain 2
+# plot(out[,c(1,3)], type='l')
+# plot(out[,c(1,4)], type='l')
+# 
+# ## With this set of parameters, drug resistance emerges seldom
+# pars <- c(theta=10, chi=0.1, alpha1=0.1, alpha2=0.09, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.001, D=10, tDrug=150)
+# out <- stochastic_strain_competition_w_drugs(500, tstep=0.1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=floor(runif(1,1,1e5)))
+# par(mfrow=c(1,3))
+# plot(out[,c(1,2)], type='l')
+# abline(h=pars["eta2"]*pars["delta2"]/(pars["epsilon2"]*pars["alpha2"]-pars["delta2"])) ## resource requirement for strain 2
+# plot(out[,c(1,3)], type='l')
+# plot(out[,c(1,4)], type='l')
+# 
+
+if(!(file.exists("out10.RDS"))) {
+  ## Load a set of seeds
+  seeds <- readRDS("seeds.RDS")
+  lapply(seq(0,5,0.25), 
+         function(drug) {
+           print(drug)
+           pars <- c(theta=10, chi=0.1, alpha1=0.1, alpha2=0.09, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.001, D=drug, tDrug=150)
+           mclapply(seeds, 
+                    function(s) stochastic_strain_competition_w_drugs(500, tstep=1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=s),
+                    mc.cores=12)
+         }) -> out10
+  saveRDS(out10, "out10.RDS")
+} else out10 <- readRDS("out10.RDS")
+
+## measure the probability of emergence as the probability that the abundance of the resistant strain over the final 10 time points is higher than the expected abundance based on the drug-free situation
+cutoff <- lapply(out10[[1]], function(o) tail(o[,4],10) %>% mean) %>% unlist %>% mean(.,na.rm=TRUE)
+
+lapply(1:length(out10),
+       function(i) (lapply(out10[[i]], function(o) (ifelse((!is.na(tail(o[,4],1))),tail(o[,4],10) %>% mean,0) > 2*cutoff)) %>% unlist %>% sum)/length(out10[[i]])) %>% unlist -> emergeProb10
+
+par(mar=c(3,5,0.5,0.5))
+plot(seq(0,5,0.25), emergeProb10, pch=21, bg=1, cex=1.5, xaxt='n', ylab="Probability of resistance", cex.lab=1.5, cex.axis=1.65)
+axis(1,tick=TRUE,labels=FALSE)
+mtext(side=1, line=1.5, "Drug dose", cex=1.65)
+```
+
+In Fig. \@ref(fig:highIngestFig2), you can see that the "crushing" effect of the drugs on the drug-susceptible strain is still evident, as the time between drug onset and susceptible extinction decreases with increasing drug dose.
+Even increasing the dose greatly (from 5 to 20) doesn't change the expected probability of resistance emerging, even though it does continue to decrease the time until susceptible extinction.
+I propose a straightforward explanation for this: if resistance has emerged, whether dose is 5 or 20 is irrelevant - it's enough to give a big fitness advantage to the drug susceptible strain and thus to facilitate the evolution of resistance.
+
+```{r highIngestFig2, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high."}
+
+## Time to extinction:
+lapply(1:length(out10), 
+       function(i) lapply(out10[[i]], 
+                          function(o) ifelse(tail(o[,1],1) > 150, 
+                                             c(o[(o[,1] > 150) %>% which %>% min,1], ifelse(any(o[,3]==0), 
+                                                                                            o[which(o[,3]==0) %>% min,1], 
+                                                                                            350)) %>% diff,
+                                             NA)
+                          ) %>% unlist %>% mean(.,na.rm=TRUE)
+) %>% unlist -> timeToExtinction
+    
+par(mar=c(3,5,0.5,0.5))
+plot(seq(0,5,0.25), timeToExtinction, pch=21, bg=1, cex=1.5, xaxt='n', ylab="Time until susceptible extinction", cex.lab=1.5, cex.axis=1.65)
+axis(1,tick=TRUE,labels=FALSE)
+mtext(side=1, line=1.5, "Drug dose", cex=1.65)               
+    
+
+
+## Even increasing dose to 20 doesn't change the fundamental result
+# pars <- c(theta=10, chi=0.1, alpha1=0.1, alpha2=0.09, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.001, D=40, tDrug=150)
+# mclapply(seeds, 
+#          function(s) stochastic_strain_competition_w_drugs(500, tstep=0.1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=s),
+#          mc.cores=12) -> ou
+# ## Proability of emergence doesn't change
+# 1-(lapply(ou, function(o) tail(o[,4],1)) %>% unlist %>% is.na %>% sum)/length(ou)
+# ## But mean time to clearance decreases some more
+# (lapply(ou, function(o) o[which(o[,3]==0) %>% min,1]) %>% unlist %>% mean(.,na.rm=T))-150
+```
+
+To test that hypothesis, I can look at the probability of resistance emerging with dose when there were no resistant strains around at the time of drug treatment starting (Fig. \@ref(fig:highIngestFig3)).
+
+```{r highIngestFig3, fig.width=6, fig.height=5, fig.cap="Comparing the amount of drug resistance present at the beginning and the end of the simulations across multiple drug doses. What is evident here is that, at low doses, even if abundance is low at the beginning of drugs, there is a chance of emergence, although it is contained; at high doses, though, if resistance isn't there at the beginning, it is very unlikely to evolve."}
+par(mfrow=c(2,3), mar=c(3,3,0.5,0.5), oma=c(3,3,0,0))
+lapply(out10[[1]], function(o) c(o[151,4],o[501,4])) %>% do.call(rbind.data.frame,.) -> x
+x[is.na(x)] <- 0
+plot(x[,1], x[,2], xlab="", ylab="")
+legend(x='topleft', "Dose = 0", bty='n')
+
+lapply(out10[[5]], function(o) c(o[151,4],o[501,4])) %>% do.call(rbind.data.frame,.) -> x
+x[is.na(x)] <- 0
+plot(x[,1], x[,2], xlab="", ylab="")
+legend(x='topleft', "Dose = 1", bty='n')
+
+lapply(out10[[9]], function(o) c(o[151,4],o[501,4])) %>% do.call(rbind.data.frame,.) -> x
+x[is.na(x)] <- 0
+plot(x[,1], x[,2], xlab="", ylab="")
+legend(x='topleft', "Dose = 2", bty='n')
+
+lapply(out10[[13]], function(o) c(o[151,4],o[501,4])) %>% do.call(rbind.data.frame,.) -> x
+x[is.na(x)] <- 0
+plot(x[,1], x[,2], xlab="", ylab="")
+legend(x='topleft', "Dose = 3", bty='n')
+
+lapply(out10[[17]], function(o) c(o[151,4],o[501,4])) %>% do.call(rbind.data.frame,.) -> x
+x[is.na(x)] <- 0
+plot(x[,1], x[,2], xlab="", ylab="")
+legend(x='topleft', "Dose = 4", bty='n')
+
+lapply(out10[[21]], function(o) c(o[151,4],o[501,4])) %>% do.call(rbind.data.frame,.) -> x
+x[is.na(x)] <- 0
+plot(x[,1], x[,2], xlab="", ylab="")
+legend(x='topleft', "Dose = 5", bty='n')
+mtext(side=1, outer=T, "Resistance at start of drugs")
+mtext(side=2, outer=T, "Resistance at end")
+
+```
+
+I can further validate this hypothesis by reducing the mutation rate and seeing whether that changes the overall pattern, making it less likely for resistance to emerge at higher doses.
+
+```{r}
+if(!(file.exists("out10_2.RDS"))) {
+  seeds <- readRDS("seeds.RDS")
+  lapply(seq(0,5,0.25), 
+         function(drug) {
+           print(drug)
+           pars <- c(theta=10, chi=0.1, alpha1=0.1, alpha2=0.09, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.0001, D=drug, tDrug=150)
+           mclapply(seeds, 
+                    function(s) stochastic_strain_competition_w_drugs(500, tstep=1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=s),
+                    mc.cores=12)
+         }) -> out10.2
+  saveRDS(out10.2, "out10_2.RDS")
+} else out10.2 <- readRDS("out10_2.RDS")
+
+if(!(file.exists("out8.RDS"))) {  
+  lapply(seq(0,5,0.25), 
+         function(drug) {
+           print(drug)
+           pars <- c(theta=8, chi=0.1, alpha1=0.1, alpha2=0.09, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.001, D=drug, tDrug=150)
+           mclapply(seeds, 
+                    function(s) stochastic_strain_competition_w_drugs(500, tstep=1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=s),
+                    mc.cores=12)
+         }) -> out8
+  saveRDS(out8, "out8.RDS")
+} else out8 <- readRDS("out8.RDS")
+  
+if(!(file.exists("out8_2.RDS"))) {  
+  lapply(seq(0,5,0.25), 
+         function(drug) {
+           print(drug)
+           pars <- c(theta=8, chi=0.1, alpha1=0.1, alpha2=0.09, eta1=1500, eta2=1500, epsilon1=20, epsilon2=20, delta1=0.1, delta2=0.1, mu=0.0001, D=drug, tDrug=150)
+           mclapply(seeds, 
+                    function(s) stochastic_strain_competition_w_drugs(500, tstep=1, pars=pars, y0=c(R=unname(pars["theta"]/pars["chi"]), P1=10, P2=0), seed=s),
+                    mc.cores=12)
+         }) -> out8.2
+  saveRDS(out8.2, "out8_2.RDS")
+} else out8.2 <- readRDS("out8_2.RDS")
+
+cutoff <- lapply(out10.2[[1]], function(o) tail(o[,4],10) %>% mean) %>% unlist %>% mean(.,na.rm=TRUE)
+
+lapply(1:length(out10.2),
+       function(i) (lapply(out10.2[[i]], function(o) (ifelse((!is.na(tail(o[,4],1))),tail(o[,4],10) %>% mean,0) > 2*cutoff)) %>% unlist %>% sum)/length(out10.2[[i]])) %>% unlist -> emergeProb10.2
+
+par(mar=c(3,5,0.5,0.5))
+plot(seq(0,5,0.25), emergeProb10.2, pch=21, bg=1, cex=1.5, xaxt='n', ylab="Probability of resistance", cex.lab=1.5, cex.axis=1.65)
+axis(1,tick=TRUE,labels=FALSE)
+mtext(side=1, line=1.5, "Drug dose", cex=1.65)
+
+
+```
