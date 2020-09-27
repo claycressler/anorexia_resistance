@@ -44,12 +44,12 @@ Another way to think about this is that, even without competition (or, important
 \begin{align}
 \frac{\theta}{\chi} &> \frac{\eta_1 \delta_1}{(\epsilon_1 \alpha_1 - \delta_1)} \\
 \frac{\theta}{\chi} &< \frac{\eta_2 \delta_2}{(\epsilon_2 \alpha_2 - \delta_2)} 
-\end{equation}
+\end{align}
 then strain 1 will win and strain 2 will be outcompeted.
 
 As a preliminary analysis, I will do stochastic simulations of the above model assuming that parasite strain 1 can persist and outcompete strain 2 in the absence of mutation.
 
-```{r sim1}
+```{r sim1, echo=FALSE}
 stochastic_strain_competition <- function(tmax, tstep, pars, y0, seed) {
   set.seed(seed)
   
@@ -158,7 +158,7 @@ library(magrittr)
 
 ```
 
-```{r fig1, fig.height=4, fig.width=6, fig.cap="Dynamics of resources and each pathogen strain when resource competition is fairly similar between the two strains. For this set of parameters, the strain 1-only resource equilibrium is 52.6, and the strain 2-only resoure equilibrim is 58.8. In the absence of parasites, the equilibrium is 100. The mutation rate is fairly high, 0.01."}
+```{r fig1, echo=FALSE, fig.height=4, fig.width=6, fig.cap="Dynamics of resources and each pathogen strain when resource competition is fairly similar between the two strains. For this set of parameters, the strain 1-only resource equilibrium is 52.6, and the strain 2-only resoure equilibrim is 58.8. In the absence of parasites, the equilibrium is 100. The mutation rate is fairly high, 0.01."}
 
 ## choose parameters appropriately so that strain 1 can persist and outcompete strain 2
 pars <- c(theta=10, chi=0.1, alpha1=1, alpha2=0.9, eta1=1000, eta2=1000, epsilon1=20, epsilon2=20, delta1=1, delta2=1, mu=0.01)
@@ -188,12 +188,15 @@ for (j in 2:4) {
   axis(1); axis(2); box('plot')
   for (i in 1:length(stoch_sims)) lines(stoch_sims[[i]][,1], stoch_sims[[i]][,j], col=gray(0.5))
   lines(stoch_sims[[1]][,1], lapply(stoch_sims, function(s) s[,j]) %>% do.call(cbind.data.frame, .) %>% apply(., 1, mean), col=1, lwd=2)
+  if(j==2) mtext(side=2, line=2, "Resource abundance")
+  if(j==3) mtext(side=2, line=2, "Drug-susceptible abundance")
+  if(j==4) mtext(side=2, line=2, "Drug-resistant abundance")
 }
 
 
 ```
 
-```{r fig2, fig.height=4, fig.width=6, fig.cap="Dynamics of resources and each pathogen strain when resource competition is more biased towards strain 1. For this set of parameters, the strain 1-only resource equilibrium is 52.6, and the strain 2-only resoure equilibrim is 76.9. In the absence of parasites, the equilibrium is 100. The mutation rate is fairly high, 0.01. This change makes the mutant strain much rarer, as it tends to be outcompeted fairly quickly."}
+```{r fig2, echo=FALSE, fig.height=4, fig.width=6, fig.cap="Dynamics of resources and each pathogen strain when resource competition is more biased towards strain 1. For this set of parameters, the strain 1-only resource equilibrium is 52.6, and the strain 2-only resoure equilibrim is 76.9. In the absence of parasites, the equilibrium is 100. The mutation rate is fairly high, 0.01. This change makes the mutant strain much rarer, as it tends to be outcompeted fairly quickly."}
 
 ## choose parameters appropriately so that strain 1 can persist and outcompete strain 2
 pars <- c(theta=10, chi=0.1, alpha1=1, alpha2=0.7, eta1=1000, eta2=1000, epsilon1=20, epsilon2=20, delta1=1, delta2=1, mu=0.01)
@@ -223,12 +226,15 @@ for (j in 2:4) {
   axis(1); axis(2); box('plot')
   for (i in 1:length(stoch_sims)) lines(stoch_sims[[i]][,1], stoch_sims[[i]][,j], col=gray(0.5))
   lines(stoch_sims[[1]][,1], lapply(stoch_sims, function(s) s[,j]) %>% do.call(cbind.data.frame, .) %>% apply(., 1, mean), col=1, lwd=2)
+  if(j==2) mtext(side=2, line=2, "Resource abundance")
+  if(j==3) mtext(side=2, line=2, "Drug-susceptible abundance")
+  if(j==4) mtext(side=2, line=2, "Drug-resistant abundance")
 }
 
 
 ```
 
-```{r fig3, fig.height=4, fig.width=6, fig.cap="This is the same set of parameters as in the preceding simulation, except that the mutation rate is much lower, 0.001. Now the mutant essentially cannot persist."}
+```{r fig3, echo=FALSE, fig.height=4, fig.width=6, fig.cap="This is the same set of parameters as in the preceding simulation, except that the mutation rate is much lower, 0.001. Now the mutant essentially cannot persist."}
 
 ## choose parameters appropriately so that strain 1 can persist and outcompete strain 2
 pars <- c(theta=10, chi=0.1, alpha1=1, alpha2=0.7, eta1=1000, eta2=1000, epsilon1=20, epsilon2=20, delta1=1, delta2=1, mu=0.001)
@@ -258,6 +264,9 @@ for (j in 2:4) {
   axis(1); axis(2); box('plot')
   for (i in 1:length(stoch_sims)) lines(stoch_sims[[i]][,1], stoch_sims[[i]][,j], col=gray(0.5))
   lines(stoch_sims[[1]][,1], lapply(stoch_sims, function(s) s[,j]) %>% do.call(cbind.data.frame, .) %>% apply(., 1, mean), col=1, lwd=2)
+  if(j==2) mtext(side=2, line=2, "Resource abundance")
+  if(j==3) mtext(side=2, line=2, "Drug-susceptible abundance")
+  if(j==4) mtext(side=2, line=2, "Drug-resistant abundance")
 }
 
 
@@ -265,7 +274,7 @@ for (j in 2:4) {
 
 How does anorexia affect these results? We can explore that by varying the value of $\theta$ and asking how that affects the abundances of both strains at equilibrium.
 
-```{r fig4, fig.height=4, fig.width=6, fig.cap="Mean resource and pathogen strain abundances across stochastic simulations for different levels of host resource ingestion."}
+```{r fig4, echo=FALSE, fig.height=8, fig.width=6, fig.cap="Mean resource and pathogen strain abundances across stochastic simulations for different levels of host resource ingestion."}
 
 ## Vary theta and record the mean trajectories only
 ## Let theta = 10 be the "normal" feeding level, so theta=8, 9 represent moderate and mild anorexia
@@ -283,23 +292,30 @@ for (th in 8:10) {
                    lapply(stoch_sims, function(s) s[,3]) %>% do.call(cbind.data.frame, .) %>% apply(., 1, mean))
   P2results <- cbind(P2results,
                    lapply(stoch_sims, function(s) s[,4]) %>% do.call(cbind.data.frame, .) %>% apply(., 1, mean))
-  print(th)
+  
 }
 
+par(mfrow=c(3,1), mar=c(4,4,0,0), oma=rep(0.5,4))
 plot.new()
 plot.window(xlim=c(0,100), ylim=range(Rresults[,1:3]))
 axis(1); axis(2); box('plot')
 for(i in 1:3) lines(seq(0,100,0.1), Rresults[,i], col=i, lwd=2)
+mtext(side=1, line=2, "Time")
+mtext(side=2, line=2, "Resource abundance")
 
 plot.new()
 plot.window(xlim=c(0,100), ylim=range(P1results[,1:3]))
 axis(1); axis(2); box('plot')
 for(i in 1:3) lines(seq(0,100,0.1), P1results[,i], col=i, lwd=2)
+mtext(side=1, line=2, "Time")
+mtext(side=2, line=2, "Drug-susceptible abundance")
 
 plot.new()
 plot.window(xlim=c(0,100), ylim=range(P2results[,1:3]))
 axis(1); axis(2); box('plot')
 for(i in 1:3) lines(seq(0,100,0.1), P2results[,i], col=i, lwd=2)
+mtext(side=1, line=2, "Time")
+mtext(side=2, line=2, "Drug-resistant abundance")
 
 
 ```
@@ -320,7 +336,7 @@ Here I will assume that drugs start at $t = 20$.
 When ingestion is high, I find that increasing drug pressure increases the likelihood of resistance emerging (Fig. \@ref(fig:highIngestFig1)). 
 This might actually strike as a bit surprising, since the argument for high-dose drugs is that they crush drug-susceptible populations quickly, thereby limiting mutation supply.
 
-```{r, echo=TRUE, eval=FALSE}
+```{r, echo=FALSE, eval=FALSE}
 stochastic_strain_competition_w_drugs <- function(tmax, tstep, pars, y0, seed) {
   set.seed(seed)
   
@@ -418,7 +434,7 @@ saveRDS(out_drug_no_anorexia_hi, file="out_drug_no_anorexia_hi.RDS")
 saveRDS(out_drug_no_anorexia_lo, file="out_drug_no_anorexia_lo.RDS")
 ```
 
-```{r highIngestFig1, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high."}
+```{r highIngestFig1, echo=FALSE, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high."}
 
 out10 <- readRDS("out_drug_no_anorexia_hi.RDS")
 
@@ -438,7 +454,7 @@ In Fig. \@ref(fig:highIngestFig2), you can see that the "crushing" effect of the
 Even increasing the dose greatly (from 5 to 20) doesn't change the expected probability of resistance emerging, even though it does continue to decrease the time until susceptible extinction.
 There is, of course, a straightforward explanation for this: if resistance has emerged, whether dose is 5 or 20 is irrelevant - it's enough to give a big fitness advantage to the drug susceptible strain and thus to facilitate the evolution of resistance.
 
-```{r highIngestFig2, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high."}
+```{r highIngestFig2, echo=FALSE, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high."}
 
 ## Time to extinction:
 lapply(1:length(out10), 
@@ -469,7 +485,7 @@ mtext(side=1, line=1.5, "Drug dose", cex=1.65)
 
 To test that hypothesis, I can look at the probability of resistance emerging with dose when there were no resistant strains around at the time of drug treatment starting (Fig. \@ref(fig:highIngestFig3)).
 
-```{r highIngestFig3, fig.width=6, fig.height=5, fig.cap="Comparing the amount of drug resistance present at the beginning and the end of the simulations across multiple drug doses. What is evident here is that, at low doses, even if abundance is low at the beginning of drugs, there is a chance of emergence, although it is contained; at high doses, though, if resistance isn't there at the beginning, it is very unlikely to evolve."}
+```{r highIngestFig3, echo=FALSE, fig.width=6, fig.height=5, fig.cap="Comparing the amount of drug resistance present at the beginning and the end of the simulations across multiple drug doses. What is evident here is that, at low doses, even if abundance is low at the beginning of drugs, there is a chance of emergence, although it is contained; at high doses, though, if resistance isn't there at the beginning, it is very unlikely to evolve."}
 par(mfrow=c(2,3), mar=c(3,3,0.5,0.5), oma=c(3,3,0,0))
 lapply(out10[[1]], function(o) c(o[151,4],o[501,4])) %>% do.call(rbind.data.frame,.) -> x
 x[is.na(x)] <- 0
@@ -507,7 +523,7 @@ mtext(side=2, outer=T, "Resistance at end")
 
 The final confirmation comes from reducing the mutation rate and seeing whether that changes the overall pattern, making it less likely for resistance to emerge at higher doses (Fig. \@ref(fig:highIngestFig4)).
 
-```{r highIngestFig4, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high but the mutation rate is much lower (0.0001). Here you can see a strong unimodal relationship between the probability of resistance emerging and drug dose, as expected where competition constrains the evolution of resistance at low doses."}
+```{r highIngestFig4, echo=FALSE, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is high but the mutation rate is much lower (0.0001). Here you can see a strong unimodal relationship between the probability of resistance emerging and drug dose, as expected where competition constrains the evolution of resistance at low doses."}
 
 out10 <- readRDS("out_drug_no_anorexia_lo.RDS")
 
@@ -536,7 +552,7 @@ With this set of parameter values, in the absence of drugs or competition, the r
 If I set the host resource ingestion to $\theta=8$, then the resource equilibrium in the absence of any pathogens is $\theta/\chi=8/0.1=80$, which is too low for the drug-resistant strain. 
 As expected, drug-resistance never emerges, regardless of the mutation rate (Fig. \@ref(fig:lowIngestFig)).
 
-```{r, echo=TRUE, eval=FALSE}
+```{r, echo=FALSE, eval=FALSE}
 lapply(seq(0,5,0.1), 
        function(drug) {
          print(drug)
@@ -559,7 +575,7 @@ saveRDS(out_drug_anorexia_lo, file="out_drug_anorexia_lo.RDS")
 
 
 ```
-```{r lowIngestFig, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is low. Regardless of mutation rate, drug resistance does not emerge because the host ingestion is such that there are not enough resources under any circumstance to sustain the drug resistant strain."}
+```{r lowIngestFig, echo=FALSE, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion is low. Regardless of mutation rate, drug resistance does not emerge because the host ingestion is such that there are not enough resources under any circumstance to sustain the drug resistant strain."}
 
 out_drug_anorexia_hi <- readRDS("out_drug_anorexia_hi.RDS")
 out_drug_anorexia_lo <- readRDS("out_drug_anorexia_lo.RDS")
@@ -585,7 +601,7 @@ A more interesting scenario would be when the ingestion rate **depends** on the 
 If ingestion increases with drug dose, what happens to the probability of resistance emergence?
 I will again compare at high and low mutation rates, allowing ingestion increase linearly from 7.5 (low enough to be unsustainable for the resistant mutant) at a drug dose of 0 to 10 at a drug dose of 10 (Fig. \@ref(fig:variableIngestFig)).
 
-```{r, echo=TRUE, eval=FALSE}
+```{r, echo=FALSE, eval=FALSE}
 lapply(seq(0,5,0.1), 
        function(drug) {
          print(drug)
@@ -609,7 +625,7 @@ saveRDS(out_drug_variable_anorexia_lo, file="out_drug_variable_anorexia_lo.RDS")
 
 ```
 
-```{r variableIngestFig, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion depends on the drug dose."}
+```{r variableIngestFig, echo=FALSE, fig.height=4, fig.width=6, fig.cap="Probability of drug-resistance emerging when ingestion depends on the drug dose."}
 
 out_drug_anorexia_hi <- readRDS("out_drug_variable_anorexia_hi.RDS")
 out_drug_anorexia_lo <- readRDS("out_drug_variable_anorexia_lo.RDS")
